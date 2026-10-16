@@ -24,7 +24,8 @@ at `/var/lib/startpage/settings.json` and are not part of this source tree.
 Both the hosted page and the extension read settings from `GET /api/settings`
 before initializing. After two seconds without a response, the extension uses
 its browser-local cache; without a cache, the page uses its built-in defaults.
-The status beneath the terminal shows syncing, synced, offline, or stale settings.
+The status in the bottom-left corner shows syncing, synced, offline, or stale
+settings with muted text and a green dot when synced or a red dot otherwise.
 Returning to a tab or reconnecting to the network checks for newer settings
 without replacing open forms. Reload to apply them.
 
