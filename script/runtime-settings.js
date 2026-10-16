@@ -2,12 +2,31 @@
 // Runtime Settings
 // ========================================
 
-const STARTPAGE_SETTINGS_URL = window.STARTPAGE_SETTINGS_URL || '/settings.json';
+const STARTPAGE_SETTINGS_URL = STARTPAGE_SETTINGS_API_URL;
 const STARTPAGE_USE_LOCAL_SETTINGS_CACHE = window.STARTPAGE_USE_LOCAL_SETTINGS_CACHE === true;
 const STARTPAGE_SETTINGS_CACHE_KEY = 'startpage-central-settings-v1';
+const STARTPAGE_SETTINGS_TIMEOUT_MS = 2000;
 
 window.STARTPAGE_SETTINGS = {};
-let _startpageSettingsCanSave = !STARTPAGE_USE_LOCAL_SETTINGS_CACHE;
+let _startpageSettingsCanSave = false;
+let _startpageSettingsChecking = false;
+
+function setStartpageSyncStatus(state, message) {
+  const status = document.getElementById('settings-sync-status');
+  if (!status) return;
+  status.dataset.state = state;
+  status.textContent = message;
+}
+
+function markStartpageSettingsStale() {
+  _startpageSettingsCanSave = false;
+  setStartpageSyncStatus('stale', 'Newer settings available — reload before saving');
+}
+
+function markStartpageSettingsSynced() {
+  _startpageSettingsCanSave = !!window.STARTPAGE_SETTINGS._revision;
+  setStartpageSyncStatus('synced', 'Synced');
+}
 
 function _cloneSettingValue(value) {
   if (value === undefined) return undefined;
@@ -124,6 +143,8 @@ function normalizeStartpageSettings(raw) {
 
   return {
     _schemaVersion: 1,
+    ...(typeof input._revision === 'string' && /^[a-f0-9]{64}$/.test(input._revision)
+      ? { _revision: input._revision } : {}),
     username: _cleanString(input.username, DEFAULT_USERNAME),
     weatherLocation: _cleanString(input.weatherLocation, DEFAULT_WEATHER_LOCATION),
     weatherUnit: ['celsius', 'fahrenheit'].includes(weatherUnit) ? weatherUnit : DEFAULT_WEATHER_UNIT,
@@ -178,35 +199,63 @@ function canSaveStartpageSettings() {
 }
 
 async function _fetchStartpageSettings() {
-  const res = await fetch(STARTPAGE_SETTINGS_URL, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), STARTPAGE_SETTINGS_TIMEOUT_MS);
+  try {
+    const res = await fetch(STARTPAGE_SETTINGS_URL, { cache: 'no-store', signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const settings = await res.json();
+    if (!_isPlainObject(settings) || typeof settings._revision !== 'string'
+      || !/^[a-f0-9]{64}$/.test(settings._revision)) {
+      throw new Error('Settings revision is missing');
+    }
+    return settings;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
-async function _refreshStartpageSettingsCache() {
+async function checkStartpageSettings() {
+  if (_startpageSettingsChecking) return;
+  _startpageSettingsChecking = true;
+  const revision = window.STARTPAGE_SETTINGS._revision;
   try {
-    cacheStartpageSettings(await _fetchStartpageSettings());
+    const fresh = await _fetchStartpageSettings();
+    // A save may have completed while this request was in flight.
+    if (window.STARTPAGE_SETTINGS._revision !== revision) return;
+    cacheStartpageSettings(fresh);
+    if (fresh._revision !== revision) {
+      markStartpageSettingsStale();
+    } else {
+      markStartpageSettingsSynced();
+    }
   } catch (err) {
-    console.warn(`Could not refresh startpage settings: ${err.message}`);
+    if (window.STARTPAGE_SETTINGS._revision === revision) {
+      setStartpageSyncStatus('offline', 'Using local settings — server unavailable');
+    }
+  } finally {
+    _startpageSettingsChecking = false;
   }
 }
 
 async function loadStartpageSettings() {
-  if (STARTPAGE_USE_LOCAL_SETTINGS_CACHE) {
-    const cached = _readCachedStartpageSettings();
-    window.STARTPAGE_SETTINGS = normalizeStartpageSettings(cached || {});
-    _startpageSettingsCanSave = cached !== null;
-    void _refreshStartpageSettingsCache();
-    return window.STARTPAGE_SETTINGS;
-  }
-
-  let raw = {};
+  _startpageSettingsCanSave = false;
+  setStartpageSyncStatus('loading', 'Syncing settings…');
+  let raw;
   try {
     raw = await _fetchStartpageSettings();
+    cacheStartpageSettings(raw);
+    setStartpageSyncStatus('synced', 'Synced');
   } catch (err) {
-    console.warn(`Using bundled startpage settings fallback: ${err.message}`);
+    const cached = _readCachedStartpageSettings();
+    raw = cached || {};
+    setStartpageSyncStatus('offline', cached
+      ? 'Using cached settings — server unavailable'
+      : 'Using defaults — server unavailable; reload before saving');
+    console.warn(`Could not load startpage settings: ${err.message}`);
   }
 
   window.STARTPAGE_SETTINGS = normalizeStartpageSettings(raw);
+  _startpageSettingsCanSave = !!window.STARTPAGE_SETTINGS._revision;
   return window.STARTPAGE_SETTINGS;
 }

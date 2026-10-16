@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
+import hashlib
 import json
 import os
 import tempfile
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -13,6 +15,7 @@ PORT = int(os.environ.get("STARTPAGE_SETTINGS_PORT", "4919"))
 ALLOWED_ORIGIN = os.environ.get("STARTPAGE_SETTINGS_ORIGIN", "https://t480s.tailae03d0.ts.net")
 MAX_BODY_BYTES = 256 * 1024
 CHROME_EXTENSION_ID_CHARS = set("abcdefghijklmnop")
+SETTINGS_LOCK = threading.Lock()
 
 SEARCH_ENGINES = {"brave", "google", "ddg", "bing"}
 BADGE_MODES = {"live", "route", "off"}
@@ -230,6 +233,11 @@ def normalize_settings(raw):
     }
 
 
+def read_settings():
+    data = SETTINGS_FILE.read_bytes()
+    return {**json.loads(data), "_revision": hashlib.sha256(data).hexdigest()}
+
+
 def write_settings(settings):
     SETTINGS_FILE.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
     data = json.dumps(settings, indent=2, ensure_ascii=False) + "\n"
@@ -280,7 +288,15 @@ class SettingsHandler(BaseHTTPRequestHandler):
             self.send_json(err.status, {"ok": False, "error": err.message})
 
     def do_GET(self):
-        self.send_json(405, {"ok": False, "error": "GET is not supported"}, extra_headers={"Allow": "PUT"})
+        if urlparse(self.path).path != "/api/settings":
+            self.send_json(404, {"ok": False, "error": "not found"})
+            return
+        try:
+            with SETTINGS_LOCK:
+                settings = read_settings()
+            self.send_json(200, settings)
+        except Exception:
+            self.send_json(503, {"ok": False, "error": "failed to read settings"})
 
     def do_POST(self):
         self.send_json(405, {"ok": False, "error": "POST is not supported"}, extra_headers={"Allow": "PUT"})
@@ -293,7 +309,15 @@ class SettingsHandler(BaseHTTPRequestHandler):
             self.validate_request_headers()
             payload = self.read_json_body()
             settings = normalize_settings(payload)
-            write_settings(settings)
+            revision = payload.get("_revision")
+            if not isinstance(revision, str) or not revision:
+                raise SettingsError(428, "Reload the start page before saving settings.")
+            # Keep the comparison and replacement together across concurrent requests.
+            with SETTINGS_LOCK:
+                if revision != read_settings()["_revision"]:
+                    raise SettingsError(409, "Newer settings are available. Reload before saving; your changes were not saved.")
+                write_settings(settings)
+                settings = read_settings()
             self.send_json(200, {"ok": True, "settings": settings})
         except SettingsError as err:
             self.send_json(err.status, {"ok": False, "error": err.message})
@@ -342,7 +366,7 @@ class SettingsHandler(BaseHTTPRequestHandler):
 
         if preflight:
             headers.update({
-                "Access-Control-Allow-Methods": "PUT, OPTIONS",
+                "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
                 "Access-Control-Allow-Headers": "Content-Type",
             })
 

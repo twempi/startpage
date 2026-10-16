@@ -100,6 +100,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (typeof loadStartpageSettings === 'function') {
     await loadStartpageSettings();
   }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void checkStartpageSettings();
+  });
+  window.addEventListener('online', () => { void checkStartpageSettings(); });
   initPlaceholders();
   loadTheme();
   applySyntaxColors(getStoredSyntaxColors());

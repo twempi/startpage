@@ -82,9 +82,10 @@ async function saveStartpageSettings(patch, options = {}) {
 
   try {
     if (typeof canSaveStartpageSettings === 'function' && !canSaveStartpageSettings()) {
-      throw new Error('Settings are syncing. Reload the start page once syncing finishes.');
+      throw new Error('Reload the start page with the server reachable before saving settings.');
     }
 
+    setStartpageSyncStatus('saving', 'Saving settings…');
     const res = await fetch(STARTPAGE_SETTINGS_API_URL, {
       method: 'PUT',
       credentials: 'same-origin',
@@ -102,6 +103,11 @@ async function saveStartpageSettings(patch, options = {}) {
     }
 
     if (!res.ok || !payload.ok) {
+      if (res.status === 409 || res.status === 428) {
+        markStartpageSettingsStale();
+      } else {
+        setStartpageSyncStatus('error', 'Settings not saved — try again');
+      }
       throw new Error(payload.error || `HTTP ${res.status}`);
     }
 
@@ -109,11 +115,15 @@ async function saveStartpageSettings(patch, options = {}) {
     if (typeof cacheStartpageSettings === 'function') {
       cacheStartpageSettings(window.STARTPAGE_SETTINGS);
     }
+    markStartpageSettingsSynced();
     if (showSuccess && typeof showToast === 'function') {
       showToast(successMessage, 'success', 1800);
     }
     return window.STARTPAGE_SETTINGS;
   } catch (err) {
+    if (err instanceof TypeError) {
+      setStartpageSyncStatus('offline', 'Settings not saved — server unavailable');
+    }
     if (typeof showToast === 'function') {
       showToast(`Could not save settings: ${err.message}`, 'error', 5000);
     }

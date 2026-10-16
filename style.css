@@ -59,6 +59,23 @@ img {
   display: block;
 }
 
+.terminal-section .settings-sync-status {
+  flex-basis: 100%;
+  font-weight: 400;
+  text-align: right;
+  font-size: 0.75rem;
+  font-family: var(--monospace-font-family);
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
+.terminal-section .settings-sync-status[data-state="offline"],
+.terminal-section .settings-sync-status[data-state="stale"],
+.terminal-section .settings-sync-status[data-state="error"] {
+  color: var(--color-warning);
+  opacity: 1;
+}
+
 /* Theme Overlay */
 .theme-overlay {
   position: fixed;
