@@ -419,7 +419,7 @@ async function handleResetCommand() {
     const key = localStorage.key(i);
     if (
       key === 'terminal-history-v1' ||
-      key === FAVICON_CACHE_KEY ||
+      key === 'favicon-resolved-v1' || // legacy favicon cache (icons were removed)
       key.startsWith('weather_')
     ) {
       keysToRemove.push(key);

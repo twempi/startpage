@@ -2,9 +2,22 @@
 
 A keyboard-driven browser start page with Stylix theming and centralized settings.
 
+## Look
+
+The layout follows [kencx/startpage](https://github.com/kencx/startpage): an
+image on the left, a `> cd ~/_` heading, plain-text bookmark columns, and the
+terminal input underneath. Colours come from Stylix (Gruvbox Dark is the
+fallback when no Stylix CSS loads) and the font is the Stylix monospace font.
+The renderer picks text and link colours that reach 4.5:1 contrast on every
+scheme.
+
+To change the side image, replace `img/cat.webp` (or point the `side-image`
+`<img>` in `index.html` at another file in `img/`). The current image is
+kencx's cat gif (art by avogado6), converted to WebP.
+
 ## Source layout
 
-- `index.html`, `style.css`, `script/`, `icon/`, and `version/`: startpage assets.
+- `index.html`, `style.css`, `script/`, `icon/`, `img/`, and `version/`: startpage assets.
 - `focus/` and `manifests/chrome.json`: Chromium extension entry point and manifest.
 - `lib/mkStylixStartpage.nix`: renderer used by the currently hosted site.
 - `settings-api.py`: settings API used by the hosted site and extension.
