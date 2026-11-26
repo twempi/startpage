@@ -4,7 +4,9 @@
 
 function initializeBrowserInfo() {
   document.getElementById("username").textContent = getStoredUsername();
-  document.getElementById("browser-info").textContent = getBrowser();
+  // The Nix build can bake in the device hostname; otherwise show the browser.
+  const hostname = typeof window.STARTPAGE_HOSTNAME === 'string' ? window.STARTPAGE_HOSTNAME.trim() : '';
+  document.getElementById("browser-info").textContent = hostname || getBrowser();
 }
 
 function typePlaceholder(input, examples, typingSpeed = 50) {

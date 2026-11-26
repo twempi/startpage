@@ -71,24 +71,99 @@ function _getBookmarkCategoryGroups(bookmarks) {
   return groups;
 }
 
+// ========================================
+// Bookmark pages (up to SECTIONS_PER_PAGE categories each)
+// ========================================
+const SECTIONS_PER_PAGE = 8; // 4 columns x 2 rows
+
+let _bookmarkPages = []; // page elements, in order
+let _homePage = 0;       // page the user picked (click / Alt+arrows)
+
+function _pageIndexOf(el) {
+  return _bookmarkPages.findIndex(page => page.contains(el));
+}
+
+function _renderBookmarkPager(shownIndex) {
+  const pager = document.getElementById('bookmark-pager');
+  if (!pager) return;
+  pager.innerHTML = '';
+  pager.hidden = _bookmarkPages.length < 2;
+  if (pager.hidden) return;
+
+  _bookmarkPages.forEach((_, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bookmark-pager-btn';
+    // Same width active or not, so the row never shifts: "[1]" vs " 2 "
+    btn.textContent = i === shownIndex ? `[${i + 1}]` : `\u00a0${i + 1}\u00a0`;
+    btn.setAttribute('aria-label', `Bookmark page ${i + 1}`);
+    if (i === shownIndex) btn.setAttribute('aria-current', 'page');
+    btn.addEventListener('click', () => setBookmarkPage(i));
+    pager.appendChild(btn);
+  });
+}
+
+// Show a page without changing the user's chosen page (used by filtering).
+function _showBookmarkPage(index) {
+  _bookmarkPages.forEach((page, i) => {
+    const active = i === index;
+    page.classList.toggle('is-active', active);
+    page.inert = !active;
+    page.setAttribute('aria-hidden', String(!active));
+  });
+  _renderBookmarkPager(index);
+}
+
+function setBookmarkPage(index) {
+  const count = _bookmarkPages.length;
+  if (!count) return;
+  _homePage = ((index % count) + count) % count;
+  _showBookmarkPage(_homePage);
+}
+
+function changeBookmarkPage(delta) {
+  setBookmarkPage(_homePage + delta);
+}
+
+// Alt+Left / Alt+Right switch pages (capture phase, so the terminal input's
+// ArrowRight autocomplete doesn't also fire).
+document.addEventListener('keydown', (e) => {
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if (_bookmarkPages.length < 2) return;
+  if (document.querySelector('.config-modal.active, #sp-modal-overlay')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  changeBookmarkPage(e.key === 'ArrowRight' ? 1 : -1);
+}, { capture: true });
+
 function generateBookmarks() {
   const container = document.getElementById('bookmarks');
   container.innerHTML = '';
   _upfrontSlots = [];
+  _bookmarkPages = [];
 
   const bookmarks = getStoredBookmarks();
-  const categoryGroups = _getBookmarkCategoryGroups(bookmarks);
+  let groups = _getBookmarkCategoryGroups(bookmarks);
 
-  if (categoryGroups.length) {
-    categoryGroups.forEach(group => _appendBookmarkSection(container, group.title, group.bookmarks));
-    return;
+  if (!groups.length) {
+    const numSections = Math.ceil(bookmarks.length / ITEMS_PER_SECTION);
+    groups = Array.from({ length: numSections }, (_, i) => ({
+      title: null,
+      bookmarks: bookmarks.slice(i * ITEMS_PER_SECTION, (i + 1) * ITEMS_PER_SECTION),
+    }));
   }
 
-  const numSections = Math.ceil(bookmarks.length / ITEMS_PER_SECTION);
-  for (let i = 0; i < numSections; i++) {
-    const slice = bookmarks.slice(i * ITEMS_PER_SECTION, (i + 1) * ITEMS_PER_SECTION);
-    _appendBookmarkSection(container, null, slice);
+  for (let i = 0; i < groups.length; i += SECTIONS_PER_PAGE) {
+    const page = document.createElement('div');
+    page.className = 'bookmark-page';
+    groups.slice(i, i + SECTIONS_PER_PAGE)
+      .forEach(group => _appendBookmarkSection(page, group.title, group.bookmarks));
+    container.appendChild(page);
+    _bookmarkPages.push(page);
   }
+
+  setBookmarkPage(Math.min(_homePage, Math.max(0, _bookmarkPages.length - 1)));
 }
 
 // ---- Score a bookmark against a query ----
@@ -127,6 +202,7 @@ function filterBookmarksWithShelf(rawValue) {
         delete li._shelfBookmark;
       }
     });
+    _showBookmarkPage(_homePage);
     _lastBookmarkMatch = null;
     return null;
   }
@@ -189,8 +265,11 @@ function filterBookmarksWithShelf(rawValue) {
     }
   });
 
-  // Best match gets primary highlight
+  // Best match gets primary highlight; show its page even if it isn't the
+  // one the user picked, otherwise stay on the user's page.
   if (bestMatchLi) bestMatchLi.classList.add('primary-match');
+  const matchPage = bestMatchLi ? _pageIndexOf(bestMatchLi) : -1;
+  _showBookmarkPage(matchPage >= 0 ? matchPage : _homePage);
 
   _lastBookmarkMatch = bestMatch;
   return bestMatch;

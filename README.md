@@ -5,11 +5,20 @@ A keyboard-driven browser start page with Stylix theming and centralized setting
 ## Look
 
 The layout follows [kencx/startpage](https://github.com/kencx/startpage): an
-image on the left, a `> cd ~/_` heading, plain-text bookmark columns, and the
-terminal input underneath. Colours come from Stylix (Gruvbox Dark is the
-fallback when no Stylix CSS loads) and the font is the Stylix monospace font.
-The renderer picks text and link colours that reach 4.5:1 contrast on every
-scheme.
+image with the time and weather under it on the left, and on the right the
+terminal prompt as the heading (`edward@<hostname>$ _`) above plain-text
+bookmark columns. Colours come from Stylix (Gruvbox Dark is the fallback when
+no Stylix CSS loads) and the font is the Stylix monospace font. The renderer
+picks text and link colours that reach 4.5:1 contrast on every scheme.
+
+Bookmark categories are shown 8 per page (4 columns x 2 rows) in the order
+they have in `:bookmarks`; reorder categories there to move them between
+pages. Switch pages with `Alt+←` / `Alt+→` or the `[1] 2` indicator. Typing
+searches every page and jumps to the page holding the best match.
+
+The prompt shows the device hostname when the renderer gets `hostname`
+(the Helium/LibreWolf extensions pass `networking.hostName` from `.dotnix`);
+otherwise, as on the shared hosted site, it shows the browser name.
 
 To change the side image, replace `img/cat.webp` (or point the `side-image`
 `<img>` in `index.html` at another file in `img/`). The current image is

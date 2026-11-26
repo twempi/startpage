@@ -138,7 +138,7 @@ a:hover {
   color: var(--link-hover-color);
 }
 
-/* Page layout: image on the left, prompt + bookmarks + terminal on the right */
+/* Page layout: image + time/weather on the left, prompt + bookmarks on the right */
 .content {
   display: grid;
   grid-template-columns: minmax(0, 460px) minmax(0, 720px);
@@ -153,13 +153,16 @@ a:hover {
 }
 
 .left-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
   width: 100%;
-  aspect-ratio: 1 / 1;
 }
 
 .side-image {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 1 / 1;
   object-fit: contain;
 }
 
@@ -171,27 +174,11 @@ a:hover {
   min-width: 0;
 }
 
-.head {
-  font-size: 40px;
-  line-height: 1.2;
-  color: var(--text-color);
-}
-
-.blinking {
-  animation: blink 1s ease-in-out infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-/* Time and Weather Section */
+/* Time and Weather Section (under the image) */
 .info-section {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 10px;
   font-size: 14px;
   color: var(--link-color);
 }
@@ -210,13 +197,25 @@ a:hover {
   opacity: 0.5;
 }
 
-/* Bookmark columns */
+/* Bookmark pages: all pages share one grid cell, so the area is as tall as
+   the tallest page and switching pages never moves the prompt. */
 .bookmark-sections {
+  display: grid;
+  width: 100%;
+  padding-top: 20px;
+}
+
+.bookmark-page {
+  grid-area: 1 / 1;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  width: 100%;
-  padding-top: 20px;
+  align-content: flex-start;
+  visibility: hidden;
+}
+
+.bookmark-page.is-active {
+  visibility: visible;
 }
 
 .bookmark-section {
@@ -267,28 +266,58 @@ a:hover {
   outline: none;
 }
 
-/* Command Line Section */
+/* Page indicator: "[1]  2" */
+.bookmark-pager {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.bookmark-pager[hidden] {
+  display: none;
+}
+
+.bookmark-pager-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-family: var(--monospace-font-family);
+  font-size: 14px;
+  color: var(--link-color);
+  white-space: pre;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.bookmark-pager-btn:hover {
+  color: var(--link-hover-color);
+}
+
+.bookmark-pager-btn[aria-current="page"] {
+  color: var(--text-color);
+}
+
+/* Command line = the heading ("edward@host$ _") */
 .terminal-section {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
   width: 100%;
-  max-width: 600px;
-  margin-top: 20px;
-  padding: 8px 2px;
-  border-bottom: 1px solid var(--card-border);
-  transition: border-color 0.15s ease;
+  font-size: 40px;
+  line-height: 1.2;
 }
 
-.terminal-section:focus-within {
-  border-bottom-color: var(--link-color);
+.prompt-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5ch;
+  width: 100%;
+  min-width: 0;
 }
 
-.terminal-section p {
+.terminal-section .prompt {
   font-family: var(--monospace-font-family);
-  font-size: 16px;
-  color: var(--link-color);
+  color: var(--text-color);
   white-space: nowrap;
 }
 
@@ -320,10 +349,10 @@ a:hover {
 
 .ai-route-badge.show {
   display: block;
-  flex: 1 1 100%;
+  width: 100%;
   opacity: 1;
   transform: translateY(0);
-  margin-top: 2px;
+  margin-top: 8px;
   max-height: 110px;
   padding: 8px 10px;
   border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
@@ -353,14 +382,17 @@ a:hover {
   background: none;
   border: none;
   font-family: var(--monospace-font-family);
-  font-size: 16px;
+  font-size: 1em;
+  line-height: inherit;
   color: var(--terminal-text);
+  caret-color: var(--text-color);
+  caret-shape: underscore; /* the blinking "_" */
   width: 100%;
   outline: none;
 }
 
 #terminal-input::placeholder {
-  color: color-mix(in srgb, var(--text-color) 35%, transparent);
+  color: color-mix(in srgb, var(--text-color) 30%, transparent);
 }
 
 /* Input text color based on command type */
@@ -395,7 +427,8 @@ a:hover {
   top: 0;
   pointer-events: none;
   font-family: var(--monospace-font-family);
-  font-size: 16px;
+  font-size: 1em;
+  line-height: inherit;
   width: 100%;
   overflow: hidden;
   white-space: pre;
@@ -1457,17 +1490,22 @@ a:hover {
 @media (max-width: 900px) {
   .content {
     grid-template-columns: minmax(0, 560px);
+    row-gap: 24px;
     padding: 32px 16px;
   }
 
-  .left-container {
+  .side-image {
     display: none;
+  }
+
+  .left-container {
+    order: 1;
   }
 }
 
 @media (max-width: 600px) {
-  .head {
-    font-size: 32px;
+  .terminal-section {
+    font-size: 28px;
   }
 
   .bookmark-section {
@@ -1477,12 +1515,6 @@ a:hover {
 
   .bookmark-section li a {
     max-width: 140px;
-  }
-
-  .terminal-section {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
   }
 }
 

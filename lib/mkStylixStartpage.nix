@@ -4,6 +4,9 @@
   colors,
   fontFamily,
   sansFontFamily ? fontFamily,
+  # Device hostname shown in the prompt (edward@<hostname>$). null = show the
+  # browser name, e.g. for the hosted site that every device shares.
+  hostname ? null,
 }: let
   color = name: "#${builtins.getAttr name colors}";
 
@@ -11,8 +14,22 @@
   # Base16 ports are inconsistent (e.g. Everforest keeps grey in base05), so
   # text and link colours are picked/blended until they reach 4.5:1.
   hexDigits = {
-    "0" = 0; "1" = 1; "2" = 2; "3" = 3; "4" = 4; "5" = 5; "6" = 6; "7" = 7;
-    "8" = 8; "9" = 9; "a" = 10; "b" = 11; "c" = 12; "d" = 13; "e" = 14; "f" = 15;
+    "0" = 0;
+    "1" = 1;
+    "2" = 2;
+    "3" = 3;
+    "4" = 4;
+    "5" = 5;
+    "6" = 6;
+    "7" = 7;
+    "8" = 8;
+    "9" = 9;
+    "a" = 10;
+    "b" = 11;
+    "c" = 12;
+    "d" = 13;
+    "e" = 14;
+    "f" = 15;
   };
   hexByte = hex: i: let
     digit = j: hexDigits.${pkgs.lib.toLower (builtins.substring (i + j) 1 hex)};
@@ -49,8 +66,14 @@
   contrast = a: b: let
     la = luminance a;
     lb = luminance b;
-    hi = if la > lb then la else lb;
-    lo = if la > lb then lb else la;
+    hi =
+      if la > lb
+      then la
+      else lb;
+    lo =
+      if la > lb
+      then lb
+      else la;
   in
     (hi + 0.05) / (lo + 0.05);
   # Blend hex a toward hex b by t (0..1), like color-mix in srgb.
@@ -90,8 +113,16 @@
 
   cssMonoFontFamily = builtins.toJSON fontFamily;
 
+  validHostname =
+    if hostname == null
+    then null
+    else if builtins.match "[A-Za-z0-9][A-Za-z0-9.-]{0,62}" hostname != null
+    then hostname
+    else throw "mkStylixStartpage: invalid hostname ${builtins.toJSON hostname}";
+
   cacheInputs = {
     inherit fontFamily sansFontFamily;
+    hostname = validHostname;
     base00 = colors.base00;
     base01 = colors.base01;
     base02 = colors.base02;
@@ -158,6 +189,7 @@
   localDefaultsJs = pkgs.writeText "startpage-local-defaults.js" ''
     (function () {
       window.STARTPAGE_STYLIX_BACKGROUND = "${stylixBackground}";
+      window.STARTPAGE_HOSTNAME = ${builtins.toJSON validHostname};
       window.STARTPAGE_DEFAULT_SYNTAX_COLORS = {
         cmd: "${color "base0D"}",
         theme: "${color "base0E"}",
@@ -175,37 +207,36 @@
       }
     })();
   '';
-
 in
   pkgs.runCommand "stylix-terminal-startpage" {nativeBuildInputs = [pkgs.gawk];} ''
-    mkdir -p "$out"
+      mkdir -p "$out"
 
-    cp ${source}/style.css "$out/style.css"
-    cp -R ${source}/icon "$out/icon"
-    cp -R ${source}/img "$out/img"
-    cp -R ${source}/script "$out/script"
-    cp -R ${source}/version "$out/version"
-    chmod -R u+w "$out/script"
+      cp ${source}/style.css "$out/style.css"
+      cp -R ${source}/icon "$out/icon"
+      cp -R ${source}/img "$out/img"
+      cp -R ${source}/script "$out/script"
+      cp -R ${source}/version "$out/version"
+      chmod -R u+w "$out/script"
 
-    mkdir -p "$out/focus"
-    cp ${source}/focus/focus.html "$out/focus/focus.html"
-    sed 's|__STYLIX_BACKGROUND__|${stylixBackground}|g' \
-      ${source}/focus/focus.js > "$out/focus/focus.js"
+      mkdir -p "$out/focus"
+      cp ${source}/focus/focus.html "$out/focus/focus.html"
+      sed 's|__STYLIX_BACKGROUND__|${stylixBackground}|g' \
+        ${source}/focus/focus.js > "$out/focus/focus.js"
 
-    awk -v base_css_style="${baseCssStyle}" '
-      /<link rel="stylesheet" href="style[.]css"/ {
-        while ((getline line < base_css_style) > 0) {
-          print line
+      awk -v base_css_style="${baseCssStyle}" '
+        /<link rel="stylesheet" href="style[.]css"/ {
+          while ((getline line < base_css_style) > 0) {
+            print line
+          }
+          close(base_css_style)
+          next
         }
-        close(base_css_style)
-        next
-      }
-      { print }
-    ' ${source}/index.html | sed \
-      -e 's#<script src="script/storage.js"></script>#<script src="script/storage.js"></script>\
-  <script src="script/local-defaults.js?v=${cacheKey}"></script>#' \
-      > "$out/index.html"
+        { print }
+      ' ${source}/index.html | sed \
+        -e 's#<script src="script/storage.js"></script>#<script src="script/storage.js"></script>\
+    <script src="script/local-defaults.js?v=${cacheKey}"></script>#' \
+        > "$out/index.html"
 
-    cp ${stylixCss} "$out/stylix.css"
-    cp ${localDefaultsJs} "$out/script/local-defaults.js"
+      cp ${stylixCss} "$out/stylix.css"
+      cp ${localDefaultsJs} "$out/script/local-defaults.js"
   ''
